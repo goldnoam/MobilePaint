@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Pencil, 
@@ -16,7 +17,14 @@ import {
   Check,
   Sun,
   Moon,
-  Mail
+  Mail,
+  Pause,
+  Play,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  RefreshCw
 } from 'lucide-react';
 import { Tool, Point, DrawingAction, FillType } from './types';
 
@@ -36,10 +44,12 @@ export default function App() {
   const [isFilled, setIsFilled] = useState(false);
   const [lineWidth, setLineWidth] = useState(5);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [history, setHistory] = useState<DrawingAction[]>([]);
   const [redoStack, setRedoStack] = useState<DrawingAction[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [showWASD, setShowWASD] = useState(false);
   
   const [currentShapePoints, setCurrentShapePoints] = useState<Point[]>([]);
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
@@ -58,7 +68,7 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  useEffect(() => {
+  const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -84,6 +94,13 @@ export default function App() {
       context.fillRect(0, 0, window.innerWidth, window.innerHeight);
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    initCanvas();
+    // Redraw on window resize
+    window.addEventListener('resize', initCanvas);
+    return () => window.removeEventListener('resize', initCanvas);
+  }, [initCanvas]);
 
   const getCoordinates = (e: any): Point => {
     const canvas = canvasRef.current;
@@ -283,6 +300,7 @@ export default function App() {
   }, [history, drawHistory, currentShapePoints, cursorPos]);
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    if (isPaused) return;
     const pos = getCoordinates(e);
     
     if (activeTool === Tool.POLYLINE || activeTool === Tool.POLYGON) {
@@ -321,6 +339,7 @@ export default function App() {
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (isPaused) return;
     const pos = getCoordinates(e);
     setCursorPos(pos);
 
@@ -438,6 +457,7 @@ export default function App() {
       setHistory([]);
       setRedoStack([]);
       setCurrentShapePoints([]);
+      initCanvas();
     }
   };
 
@@ -449,6 +469,26 @@ export default function App() {
     link.download = `drawing-${Date.now()}.jpg`;
     link.href = dataURL;
     link.click();
+  };
+
+  const handleDPadMove = (dir: 'up' | 'down' | 'left' | 'right') => {
+    if (!cursorPos) return;
+    const step = 5;
+    const nextPos = { ...cursorPos };
+    if (dir === 'up') nextPos.y -= step;
+    if (dir === 'down') nextPos.y += step;
+    if (dir === 'left') nextPos.x -= step;
+    if (dir === 'right') nextPos.x += step;
+    setCursorPos(nextPos);
+    // If drawing, simulate mouse move
+    if (isDrawing) {
+      const ctx = contextRef.current;
+      if (ctx && (activeTool === Tool.PENCIL || activeTool === Tool.ERASER)) {
+        ctx.lineTo(nextPos.x, nextPos.y);
+        ctx.stroke();
+        tempPath.current.push(nextPos);
+      }
+    }
   };
 
   const toolIcons: Record<Tool, React.ReactNode> = {
@@ -474,40 +514,49 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-white dark:bg-zinc-950 overflow-hidden transition-colors duration-300">
+    <div className="flex flex-col h-screen w-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden transition-colors duration-300">
       {/* Top Status Bar */}
       <div className="h-14 bg-white dark:bg-zinc-900 border-b dark:border-zinc-800 flex items-center justify-between px-4 shadow-sm z-20">
-        <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">צייר Pro</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">צייר Pro</h1>
+          <button 
+            onClick={() => setIsPaused(!isPaused)}
+            className={`p-2 rounded-full transition-all active:scale-90 ${isPaused ? 'bg-red-100 text-red-600 dark:bg-red-900/30' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}
+            title={isPaused ? "המשך" : "עצור ציור"}
+          >
+            {isPaused ? <Play size={20} /> : <Pause size={20} />}
+          </button>
+        </div>
         
         <div className="flex gap-1 items-center">
           <button 
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors active:scale-90 text-gray-700 dark:text-gray-300"
-            title="החלף מצב תצוגה"
+            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors active:scale-90 text-zinc-700 dark:text-zinc-300"
           >
             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          <div className="w-[1px] h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
+          <div className="w-[1px] h-6 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button 
             onClick={undo} 
-            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors active:scale-90 disabled:opacity-30 text-gray-700 dark:text-gray-300"
+            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors active:scale-90 disabled:opacity-30 text-zinc-700 dark:text-zinc-300"
             disabled={history.length === 0}
           >
             <RotateCcw size={20} />
           </button>
           <button 
             onClick={redo} 
-            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors active:scale-90 disabled:opacity-30 text-gray-700 dark:text-gray-300"
+            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors active:scale-90 disabled:opacity-30 text-zinc-700 dark:text-zinc-300"
             disabled={redoStack.length === 0}
           >
             <RotateCw size={20} />
           </button>
-          <div className="w-[1px] h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
+          <div className="w-[1px] h-6 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button 
             onClick={clearCanvas} 
             className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-full transition-colors active:scale-90"
+            title="איפוס צבעוני"
           >
-            <Trash2 size={20} />
+            <RefreshCw size={20} />
           </button>
           <button 
             onClick={downloadImage} 
@@ -519,7 +568,7 @@ export default function App() {
       </div>
 
       {/* Main Canvas Area */}
-      <div className="flex-1 relative overflow-hidden bg-gray-100 dark:bg-zinc-950 flex flex-col items-center justify-center">
+      <div className="flex-1 relative overflow-hidden bg-zinc-100 dark:bg-zinc-950 flex flex-col items-center justify-center">
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}
@@ -529,7 +578,7 @@ export default function App() {
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={endDrawing}
-          className="cursor-crosshair bg-white dark:bg-zinc-950 shadow-inner"
+          className={`cursor-crosshair bg-white dark:bg-zinc-950 shadow-inner ${isPaused ? 'opacity-70 grayscale-[0.5]' : ''}`}
         />
 
         {/* Multi-point Finish Button */}
@@ -543,12 +592,27 @@ export default function App() {
           </button>
         )}
 
+        {/* Virtual D-pad (WASD Mobile Controls) */}
+        {showWASD && (
+          <div className="absolute bottom-6 left-6 grid grid-cols-3 gap-2 p-3 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 z-50">
+            <div />
+            <button onMouseDown={() => handleDPadMove('up')} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl active:bg-blue-600 active:text-white transition-all"><ArrowUp size={24} /></button>
+            <div />
+            <button onMouseDown={() => handleDPadMove('left')} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl active:bg-blue-600 active:text-white transition-all"><ArrowLeft size={24} /></button>
+            <button onMouseDown={() => { setIsDrawing(!isDrawing); if(!isDrawing) startPos.current = cursorPos; }} className={`p-3 rounded-xl transition-all ${isDrawing ? 'bg-blue-600 text-white' : 'bg-zinc-200 dark:bg-zinc-700'}`}><Pencil size={24} /></button>
+            <button onMouseDown={() => handleDPadMove('right')} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl active:bg-blue-600 active:text-white transition-all"><ArrowRight size={24} /></button>
+            <div />
+            <button onMouseDown={() => handleDPadMove('down')} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl active:bg-blue-600 active:text-white transition-all"><ArrowDown size={24} /></button>
+            <div />
+          </div>
+        )}
+
         {/* Floating Settings Tooltip */}
         {showSettings && (
-          <div className="absolute bottom-24 right-4 bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-2xl border border-gray-100 dark:border-zinc-800 animate-in fade-in slide-in-from-bottom-4 duration-200 z-30 w-72 max-h-[70vh] overflow-y-auto no-scrollbar">
+          <div className="absolute bottom-24 right-4 bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-2xl border border-zinc-100 dark:border-zinc-800 animate-in fade-in slide-in-from-bottom-4 duration-200 z-30 w-72 max-h-[70vh] overflow-y-auto no-scrollbar">
             <div className="space-y-5">
               <div>
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 block uppercase tracking-wider">צבע קו</label>
+                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-2 block uppercase tracking-wider">צבע קו</label>
                 <div className="grid grid-cols-5 gap-2">
                   {COLORS.map(c => (
                     <button
@@ -563,39 +627,30 @@ export default function App() {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">מילוי צורה</label>
+                  <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">מילוי צורה</label>
                   <button 
                     onClick={() => setIsFilled(!isFilled)}
-                    className={`w-10 h-5 rounded-full transition-colors relative ${isFilled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-zinc-700'}`}
+                    className={`w-10 h-5 rounded-full transition-colors relative ${isFilled ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-700'}`}
                   >
                     <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isFilled ? 'left-6' : 'left-1'}`} />
                   </button>
                 </div>
                 {isFilled && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <div className="flex bg-gray-100 dark:bg-zinc-800 p-1 rounded-lg">
-                      <button 
-                        onClick={() => setFillType(FillType.SOLID)}
-                        className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === FillType.SOLID ? 'bg-white dark:bg-zinc-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
-                      >
-                        מלא
-                      </button>
-                      <button 
-                        onClick={() => setFillType(FillType.LINEAR)}
-                        className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === FillType.LINEAR ? 'bg-white dark:bg-zinc-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
-                      >
-                        קווי
-                      </button>
-                      <button 
-                        onClick={() => setFillType(FillType.RADIAL)}
-                        className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === FillType.RADIAL ? 'bg-white dark:bg-zinc-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
-                      >
-                        מעגלי
-                      </button>
+                    <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg">
+                      {Object.values(FillType).map((ft) => (
+                        <button 
+                          key={ft}
+                          onClick={() => setFillType(ft)}
+                          className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === ft ? 'bg-white dark:bg-zinc-700 text-blue-600 shadow-sm' : 'text-zinc-500'}`}
+                        >
+                          {ft === FillType.SOLID ? 'מלא' : ft === FillType.LINEAR ? 'קווי' : 'מעגלי'}
+                        </button>
+                      ))}
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] text-gray-400 font-bold uppercase">צבע {fillType !== FillType.SOLID ? '1' : ''}</label>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase">צבע {fillType !== FillType.SOLID ? '1' : ''}</label>
                       <div className="grid grid-cols-5 gap-2">
                         {COLORS.map(c => (
                           <button
@@ -610,7 +665,7 @@ export default function App() {
 
                     {fillType !== FillType.SOLID && (
                       <div className="space-y-2 animate-in fade-in duration-200">
-                        <label className="text-[10px] text-gray-400 font-bold uppercase">צבע 2</label>
+                        <label className="text-[10px] text-zinc-400 font-bold uppercase">צבע 2</label>
                         <div className="grid grid-cols-5 gap-2">
                           {COLORS.map(c => (
                             <button
@@ -627,14 +682,26 @@ export default function App() {
                 )}
               </div>
               
+              <div className="pt-2 border-t dark:border-zinc-800">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">בקר WASD</label>
+                  <button 
+                    onClick={() => setShowWASD(!showWASD)}
+                    className={`w-10 h-5 rounded-full transition-colors relative ${showWASD ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+                  >
+                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${showWASD ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+              </div>
+
               <div>
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 block uppercase tracking-wider">עובי קו</label>
+                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-2 block uppercase tracking-wider">עובי קו</label>
                 <div className="flex items-center justify-between gap-2">
                   {BRUSH_SIZES.map(size => (
                     <button
                       key={size}
                       onClick={() => setLineWidth(size)}
-                      className={`flex-1 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${lineWidth === size ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-600' : 'border-gray-100 dark:border-zinc-800 text-gray-400'}`}
+                      className={`flex-1 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${lineWidth === size ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-600' : 'border-zinc-100 dark:border-zinc-800 text-zinc-400'}`}
                     >
                       <div className="rounded-full bg-current" style={{ width: size, height: size }} />
                     </button>
@@ -662,11 +729,11 @@ export default function App() {
             />
           ))}
           
-          <div className="h-10 w-[1px] bg-gray-100 dark:bg-zinc-800 mx-1 flex-shrink-0" />
+          <div className="h-10 w-[1px] bg-zinc-100 dark:bg-zinc-800 mx-1 flex-shrink-0" />
 
           <button 
             onClick={() => setShowSettings(!showSettings)}
-            className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-xl transition-all ${showSettings ? 'bg-blue-600 text-white shadow-inner' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
+            className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-xl transition-all ${showSettings ? 'bg-blue-600 text-white shadow-inner' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
           >
             <Settings2 size={22} />
             <span className="text-[10px] mt-1 font-medium">הגדרות</span>
@@ -675,7 +742,7 @@ export default function App() {
       </div>
 
       {/* Footer */}
-      <footer className="h-10 bg-gray-50 dark:bg-zinc-950 border-t dark:border-zinc-900 flex items-center justify-between px-4 text-[10px] text-gray-500 dark:text-gray-400 z-20">
+      <footer className="h-10 bg-zinc-50 dark:bg-zinc-950 border-t dark:border-zinc-900 flex items-center justify-between px-4 text-[10px] text-zinc-500 dark:text-zinc-400 z-20">
         <div>(C) Noam Gold AI 2026</div>
         <div className="flex items-center gap-2">
           <span>שלח משוב</span>
@@ -700,12 +767,12 @@ const ToolButton: React.FC<ToolButtonProps> = ({ active, onClick, icon, label })
   return (
     <button 
       onClick={onClick}
-      className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-xl transition-all active:scale-90 ${active ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800'}`}
+      className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-xl transition-all active:scale-90 ${active ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
     >
       <div className={`${active ? 'scale-110 transform' : ''} transition-transform`}>
         {icon}
       </div>
-      <span className={`text-[10px] mt-1 font-medium ${active ? 'text-blue-600 font-bold' : 'text-gray-400 dark:text-gray-500'}`}>{label}</span>
+      <span className={`text-[10px] mt-1 font-medium ${active ? 'text-blue-600 font-bold' : 'text-zinc-400 dark:text-zinc-500'}`}>{label}</span>
       {active && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-0.5" />}
     </button>
   );
