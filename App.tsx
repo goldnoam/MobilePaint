@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Pencil, 
@@ -15,8 +14,9 @@ import {
   Spline,
   Hexagon,
   Check,
-  Maximize,
-  CircleDot
+  Sun,
+  Moon,
+  Mail
 } from 'lucide-react';
 import { Tool, Point, DrawingAction, FillType } from './types';
 
@@ -29,7 +29,7 @@ const BRUSH_SIZES = [2, 5, 10, 15, 20];
 
 export default function App() {
   const [activeTool, setActiveTool] = useState<Tool>(Tool.PENCIL);
-  const [color, setColor] = useState('#000000');
+  const [color, setColor] = useState('#3b82f6');
   const [fillColor, setFillColor] = useState('#3b82f6');
   const [fillColor2, setFillColor2] = useState('#ffffff');
   const [fillType, setFillType] = useState<FillType>(FillType.SOLID);
@@ -39,6 +39,7 @@ export default function App() {
   const [history, setHistory] = useState<DrawingAction[]>([]);
   const [redoStack, setRedoStack] = useState<DrawingAction[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
   
   const [currentShapePoints, setCurrentShapePoints] = useState<Point[]>([]);
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
@@ -48,18 +49,29 @@ export default function App() {
   const startPos = useRef<Point | null>(null);
   const tempPath = useRef<Point[]>([]);
 
+  // Theme Sync
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const toolbarHeight = 80;
     const headerHeight = 56;
+    const footerHeight = 40;
     const dpr = window.devicePixelRatio || 1;
     
+    const availableHeight = window.innerHeight - toolbarHeight - headerHeight - footerHeight;
     canvas.width = window.innerWidth * dpr;
-    canvas.height = (window.innerHeight - toolbarHeight - headerHeight) * dpr;
+    canvas.height = availableHeight * dpr;
     canvas.style.width = `${window.innerWidth}px`;
-    canvas.style.height = `${window.innerHeight - toolbarHeight - headerHeight}px`;
+    canvas.style.height = `${availableHeight}px`;
 
     const context = canvas.getContext('2d', { alpha: false });
     if (context) {
@@ -68,10 +80,10 @@ export default function App() {
       context.lineJoin = 'round';
       contextRef.current = context;
       
-      context.fillStyle = 'white';
+      context.fillStyle = isDarkMode ? '#09090b' : 'white';
       context.fillRect(0, 0, window.innerWidth, window.innerHeight);
     }
-  }, []);
+  }, [isDarkMode]);
 
   const getCoordinates = (e: any): Point => {
     const canvas = canvasRef.current;
@@ -87,7 +99,7 @@ export default function App() {
     } else if (e.changedTouches && e.changedTouches.length > 0) {
       clientX = e.changedTouches[0].clientX;
       clientY = e.changedTouches[0].clientY;
-    } else {
+    } else if (typeof e.clientX !== 'undefined') {
       clientX = e.clientX;
       clientY = e.clientY;
     }
@@ -182,7 +194,7 @@ export default function App() {
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = isDarkMode ? '#09090b' : 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
 
@@ -264,7 +276,7 @@ export default function App() {
       }
       ctx.stroke();
     }
-  }, [history, currentShapePoints, cursorPos, color, lineWidth, activeTool, isFilled, fillColor, fillColor2, fillType]);
+  }, [history, currentShapePoints, cursorPos, color, lineWidth, activeTool, isFilled, fillColor, fillColor2, fillType, isDarkMode]);
 
   useEffect(() => {
     drawHistory();
@@ -286,7 +298,7 @@ export default function App() {
 
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
-    ctx.strokeStyle = activeTool === Tool.ERASER ? 'white' : color;
+    ctx.strokeStyle = activeTool === Tool.ERASER ? (isDarkMode ? '#09090b' : 'white') : color;
     ctx.lineWidth = lineWidth;
     
     if (activeTool === Tool.PENCIL || activeTool === Tool.ERASER) {
@@ -370,7 +382,7 @@ export default function App() {
 
     const newAction: DrawingAction = {
       tool: activeTool,
-      color: activeTool === Tool.ERASER ? 'white' : color,
+      color: activeTool === Tool.ERASER ? (isDarkMode ? '#09090b' : 'white') : color,
       fillColor: (isFilled && (activeTool === Tool.RECTANGLE || activeTool === Tool.CIRCLE)) ? fillColor : undefined,
       fillColor2: (isFilled && fillType !== FillType.SOLID && (activeTool === Tool.RECTANGLE || activeTool === Tool.CIRCLE)) ? fillColor2 : undefined,
       fillType: isFilled ? fillType : undefined,
@@ -462,30 +474,38 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-gray-100 overflow-hidden">
+    <div className="flex flex-col h-screen w-screen bg-white dark:bg-zinc-950 overflow-hidden transition-colors duration-300">
       {/* Top Status Bar */}
-      <div className="h-14 bg-white border-b flex items-center justify-between px-4 shadow-sm z-20">
+      <div className="h-14 bg-white dark:bg-zinc-900 border-b dark:border-zinc-800 flex items-center justify-between px-4 shadow-sm z-20">
         <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">צייר Pro</h1>
         
         <div className="flex gap-1 items-center">
           <button 
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors active:scale-90 text-gray-700 dark:text-gray-300"
+            title="החלף מצב תצוגה"
+          >
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          <div className="w-[1px] h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
+          <button 
             onClick={undo} 
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors active:scale-90 disabled:opacity-30"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors active:scale-90 disabled:opacity-30 text-gray-700 dark:text-gray-300"
             disabled={history.length === 0}
           >
             <RotateCcw size={20} />
           </button>
           <button 
             onClick={redo} 
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors active:scale-90 disabled:opacity-30"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors active:scale-90 disabled:opacity-30 text-gray-700 dark:text-gray-300"
             disabled={redoStack.length === 0}
           >
             <RotateCw size={20} />
           </button>
-          <div className="w-[1px] h-6 bg-gray-200 mx-1" />
+          <div className="w-[1px] h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
           <button 
             onClick={clearCanvas} 
-            className="p-2 hover:bg-red-50 text-red-500 rounded-full transition-colors active:scale-90"
+            className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-full transition-colors active:scale-90"
           >
             <Trash2 size={20} />
           </button>
@@ -499,7 +519,7 @@ export default function App() {
       </div>
 
       {/* Main Canvas Area */}
-      <div className="flex-1 relative overflow-hidden bg-gray-200 flex flex-col items-center justify-center">
+      <div className="flex-1 relative overflow-hidden bg-gray-100 dark:bg-zinc-950 flex flex-col items-center justify-center">
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}
@@ -509,7 +529,7 @@ export default function App() {
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={endDrawing}
-          className="cursor-crosshair bg-white shadow-inner"
+          className="cursor-crosshair bg-white dark:bg-zinc-950 shadow-inner"
         />
 
         {/* Multi-point Finish Button */}
@@ -525,10 +545,10 @@ export default function App() {
 
         {/* Floating Settings Tooltip */}
         {showSettings && (
-          <div className="absolute bottom-24 right-4 bg-white p-4 rounded-2xl shadow-2xl border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-200 z-30 w-72 max-h-[70vh] overflow-y-auto no-scrollbar">
+          <div className="absolute bottom-24 right-4 bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-2xl border border-gray-100 dark:border-zinc-800 animate-in fade-in slide-in-from-bottom-4 duration-200 z-30 w-72 max-h-[70vh] overflow-y-auto no-scrollbar">
             <div className="space-y-5">
               <div>
-                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">צבע קו</label>
+                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 block uppercase tracking-wider">צבע קו</label>
                 <div className="grid grid-cols-5 gap-2">
                   {COLORS.map(c => (
                     <button
@@ -543,32 +563,32 @@ export default function App() {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">מילוי צורה</label>
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">מילוי צורה</label>
                   <button 
                     onClick={() => setIsFilled(!isFilled)}
-                    className={`w-10 h-5 rounded-full transition-colors relative ${isFilled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                    className={`w-10 h-5 rounded-full transition-colors relative ${isFilled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-zinc-700'}`}
                   >
                     <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isFilled ? 'left-6' : 'left-1'}`} />
                   </button>
                 </div>
                 {isFilled && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                    <div className="flex bg-gray-100 dark:bg-zinc-800 p-1 rounded-lg">
                       <button 
                         onClick={() => setFillType(FillType.SOLID)}
-                        className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === FillType.SOLID ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                        className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === FillType.SOLID ? 'bg-white dark:bg-zinc-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
                       >
                         מלא
                       </button>
                       <button 
                         onClick={() => setFillType(FillType.LINEAR)}
-                        className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === FillType.LINEAR ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                        className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === FillType.LINEAR ? 'bg-white dark:bg-zinc-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
                       >
                         קווי
                       </button>
                       <button 
                         onClick={() => setFillType(FillType.RADIAL)}
-                        className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === FillType.RADIAL ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                        className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-[10px] font-bold transition-all ${fillType === FillType.RADIAL ? 'bg-white dark:bg-zinc-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
                       >
                         מעגלי
                       </button>
@@ -608,13 +628,13 @@ export default function App() {
               </div>
               
               <div>
-                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">עובי קו</label>
+                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 block uppercase tracking-wider">עובי קו</label>
                 <div className="flex items-center justify-between gap-2">
                   {BRUSH_SIZES.map(size => (
                     <button
                       key={size}
                       onClick={() => setLineWidth(size)}
-                      className={`flex-1 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${lineWidth === size ? 'bg-blue-50 border-blue-500 text-blue-600' : 'border-gray-100 text-gray-400'}`}
+                      className={`flex-1 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${lineWidth === size ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-600' : 'border-gray-100 dark:border-zinc-800 text-gray-400'}`}
                     >
                       <div className="rounded-full bg-current" style={{ width: size, height: size }} />
                     </button>
@@ -627,7 +647,7 @@ export default function App() {
       </div>
 
       {/* Bottom Toolbar */}
-      <div className="h-20 bg-white border-t flex items-center px-2 pb-2 pt-1 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-20 overflow-x-auto no-scrollbar">
+      <div className="h-20 bg-white dark:bg-zinc-900 border-t dark:border-zinc-800 flex items-center px-2 pb-2 pt-1 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-20 overflow-x-auto no-scrollbar">
         <div className="flex items-center justify-between min-w-full gap-1">
           {(Object.values(Tool) as Tool[]).map((tool) => (
             <ToolButton 
@@ -642,22 +662,29 @@ export default function App() {
             />
           ))}
           
-          <div className="h-10 w-[1px] bg-gray-100 mx-1 flex-shrink-0" />
+          <div className="h-10 w-[1px] bg-gray-100 dark:bg-zinc-800 mx-1 flex-shrink-0" />
 
           <button 
             onClick={() => setShowSettings(!showSettings)}
-            className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-xl transition-all ${showSettings ? 'bg-blue-600 text-white shadow-inner' : 'text-gray-500 hover:bg-gray-100'}`}
+            className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-xl transition-all ${showSettings ? 'bg-blue-600 text-white shadow-inner' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
           >
             <Settings2 size={22} />
             <span className="text-[10px] mt-1 font-medium">הגדרות</span>
           </button>
         </div>
       </div>
-      
-      <style>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
+
+      {/* Footer */}
+      <footer className="h-10 bg-gray-50 dark:bg-zinc-950 border-t dark:border-zinc-900 flex items-center justify-between px-4 text-[10px] text-gray-500 dark:text-gray-400 z-20">
+        <div>(C) Noam Gold AI 2026</div>
+        <div className="flex items-center gap-2">
+          <span>שלח משוב</span>
+          <a href="mailto:goldnoamai@gmail.com" className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-bold hover:underline">
+            <Mail size={12} />
+            goldnoamai@gmail.com
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -673,12 +700,12 @@ const ToolButton: React.FC<ToolButtonProps> = ({ active, onClick, icon, label })
   return (
     <button 
       onClick={onClick}
-      className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-xl transition-all active:scale-90 ${active ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50'}`}
+      className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-xl transition-all active:scale-90 ${active ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800'}`}
     >
       <div className={`${active ? 'scale-110 transform' : ''} transition-transform`}>
         {icon}
       </div>
-      <span className={`text-[10px] mt-1 font-medium ${active ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>{label}</span>
+      <span className={`text-[10px] mt-1 font-medium ${active ? 'text-blue-600 font-bold' : 'text-gray-400 dark:text-gray-500'}`}>{label}</span>
       {active && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-0.5" />}
     </button>
   );
